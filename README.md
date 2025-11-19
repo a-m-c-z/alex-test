@@ -10,6 +10,8 @@ create resources in for this task.
 chmod +x pre_requisite_setup.sh
 ./pre_requisite_setup.sh
 
+NOTE: The person running this script will need full governance access inside the target subscription.
+
 This will:
 - Ensure, after running `az login`, that the user has the necessary permissions to perform necessry actions for this task.
 - Set up Terraform state file blob storage in Azure.
@@ -37,3 +39,5 @@ rm requirements.txt
 ln -s ../requirements/base.txt requirements.txt
 
 This will create a symlink between base.txt and requirements.txt
+
+6. Commit and push branch to Git and create pull request. This should start code quality checks, and perform Terraform Plan to test viability of code deployment into Azure.

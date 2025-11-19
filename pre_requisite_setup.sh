@@ -241,6 +241,36 @@ echo -e "${GREEN}✔ SP roles assigned${NC}"
 
 echo -e "${GREEN}✔ SP roles assigned${NC}"
 
+echo -e "\n${GREEN}Assigning Microsoft Graph permissions to Service Principal...${NC}"
+
+GRAPH_API_ID="00000003-0000-0000-c000-000000000000"
+PERM_USER_READ_ALL="df021288-bdef-4463-88db-98f22de89214"
+PERM_DIRECTORY_READ_ALL="7ab1d382-f21e-4acd-a863-ba3e13f7da61"
+
+echo -e "${BLUE}Adding User.Read.All...${NC}"
+az ad app permission add \
+  --id "$SP_APP_ID" \
+  --api $GRAPH_API_ID \
+  --api-permissions "${PERM_USER_READ_ALL}=Role" \
+  --only-show-errors >/dev/null 2>&1 || true
+
+echo -e "${BLUE}Adding Directory.Read.All...${NC}"
+az ad app permission add \
+  --id "$SP_APP_ID" \
+  --api $GRAPH_API_ID \
+  --api-permissions "${PERM_DIRECTORY_READ_ALL}=Role" \
+  --only-show-errors >/dev/null 2>&1 || true
+
+echo -e "${GREEN}✔ Microsoft Graph permissions added${NC}"
+
+echo -e "\n${GREEN}Granting admin consent for Microsoft Graph permissions...${NC}"
+
+az ad app permission admin-consent \
+  --id "$SP_APP_ID" \
+  --only-show-errors >/dev/null 2>&1 || true
+
+echo -e "${GREEN}✔ Admin consent granted (if permissions allowed)${NC}"
+
 
 # ============================================================
 # 5. Create EXACT USERS (from your snippet)

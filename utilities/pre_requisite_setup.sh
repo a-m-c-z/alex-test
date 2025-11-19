@@ -74,13 +74,31 @@ if [[ ! "$PROJ_NAME" =~ ^[a-zA-Z0-9]+$ ]]; then
     exit 1
 fi
 
+echo -e "${BLUE}How would you like to label your Terraform resources? i.e. for rg-terraform and saterraform, say 'terraform'. This must be globally unique (lowercase alphanumeric only, 3-24 characters for storage account):${NC}"
+read -r TF_LABEL
+
+# Validate Terraform label
+if [[ ! "$TF_LABEL" =~ ^[a-z0-9]+$ ]]; then
+    echo -e "${RED}Error: Terraform label must contain only lowercase letters and numbers.${NC}"
+    exit 1
+fi
+
+if [ ${#TF_LABEL} -lt 3 ] || [ ${#TF_LABEL} -gt 24 ]; then
+    echo -e "${RED}Error: Terraform label must be between 3 and 24 characters (storage account constraint).${NC}"
+    exit 1
+fi
+
 # Derived resource names
 RG_NAME="rg-${PROJ_NAME}"
 KV_NAME="kv-${PROJ_NAME}"
+TF_RG="rg-${TF_LABEL}"
+TF_STORAGE="sa${TF_LABEL}"
 
 echo -e "\n${GREEN}Using project name: ${PROJ_NAME}${NC}"
 echo -e "${GREEN}Resource Group: ${RG_NAME}${NC}"
 echo -e "${GREEN}Key Vault: ${KV_NAME}${NC}"
+echo -e "${GREEN}Terraform Resource Group: ${TF_RG}${NC}"
+echo -e "${GREEN}Terraform Storage Account: ${TF_STORAGE}${NC}"
 
 # ============================================================
 # 1. Required Permissions Check + Self-Assignment
@@ -89,6 +107,7 @@ echo -e "${GREEN}Key Vault: ${KV_NAME}${NC}"
 REQUIRED_ROLES=(
     "Owner"
     "User Access Administrator"
+    "Key Vault Administrator"
 )
 
 echo -e "\n${GREEN}Checking user permissions...${NC}"
@@ -136,8 +155,7 @@ fi
 # 2. Terraform Backend Creation
 # ============================================================
 
-TF_RG="rg-edf-temp"
-TF_STORAGE="satfedftemp"
+# TF_RG and TF_STORAGE are now set by user input above
 TF_CONTAINER="tfstate"
 
 echo -e "\n${GREEN}=== Ensuring Terraform backend exists ===${NC}"
@@ -228,14 +246,11 @@ echo -e "${BLUE}Secret:   ${SP_SECRET}${NC}"
 
 echo -e "\n${GREEN}Assigning roles to Service Principal...${NC}"
 
-echo -e "\n${GREEN}Assigning roles to Service Principal...${NC}"
-
 SP_ROLES=(
     "Contributor|/subscriptions/${SUBSCRIPTION_ID}"
     "User Access Administrator|/subscriptions/${SUBSCRIPTION_ID}"
     "Storage Blob Data Contributor|/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${TF_RG}/providers/Microsoft.Storage/storageAccounts/${TF_STORAGE}"
-    "Key Vault Secrets Officer|/subscriptions/${SUBSCRIPTION_ID}"
-    "Key Vault Administrator|/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG_NAME}/providers/Microsoft.KeyVault/vaults/${KV_NAME}"
+    "Key Vault Administrator|/subscriptions/${SUBSCRIPTION_ID}"
 )
 
 for ENTRY in "${SP_ROLES[@]}"; do
@@ -250,9 +265,6 @@ for ENTRY in "${SP_ROLES[@]}"; do
         --scope "$SCOPE" \
         --only-show-errors >/dev/null 2>&1 || true
 done
-
-echo -e "${GREEN}✔ SP roles assigned${NC}"
-
 
 echo -e "${GREEN}✔ SP roles assigned${NC}"
 
@@ -411,4 +423,3 @@ Add them in your GitHub repo:
 ===========================================================
 
 EOF
-

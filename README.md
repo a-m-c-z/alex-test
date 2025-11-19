@@ -7,8 +7,8 @@ create resources in for this task.
 
 3. Set up pre-requisite infrastructure (ensuring you cd into project root directory):
 
-chmod +x pre_requisite_setup.sh
-./pre_requisite_setup.sh
+chmod +x utilities/pre_requisite_setup.sh
+./utilities/pre_requisite_setup.sh
 
 NOTE: The person running this script will need full governance access inside the target subscription.
 
@@ -41,3 +41,46 @@ ln -s ../requirements/base.txt requirements.txt
 This will create a symlink between base.txt and requirements.txt
 
 6. Commit and push branch to Git and create pull request. This should start code quality checks, and perform Terraform Plan to test viability of code deployment into Azure.
+
+7. If the checks pass, merge into the main branch. This should repeat the same checks, followed by Terraform Apply, then uploading the Azure Function script to the Function App.
+
+8. Deploy the mock data csv into the preprocess blob storage. This can be done manually via the GUI, or by running 
+
+chmod +x utilities/upload_mock_data.sh
+./utilities/upload_mock_data.sh
+
+It will prompt you for your resource group, which is the same as the one provided as resource_group_name in terraform/terraform.tfvars.
+
+9. Find your function app (name provided at function_app_name) in Azure. You may need to wait for a few minutes before refreshing it and seeing the Azure Function there. Try restarting it in the GUI if needed, then refreshing again. You should see a function called 'filter_sql_servers'.
+
+10. Click it, and click 'Test/Run'. Leave the HTTP Method as 'POST' and set the Key to 'default (Function key)' and click run. You may be given a warning to add https://portal.azure.com to CORS. Follow the link to do so and click 'Save'. Give it a moment for the change to take place, navigate back to your function and click 'Test/Run', following the same steps as above.
+
+You should read 
+
+Report generated successfully: sql_servers_report_20251119_142741.xlsx
+Total SQL Server VMs: 45
+File is password-protected using Key Vault secret
+
+NOTE: You can also trigger the function from the command line using:
+
+FUNC_NAME=<function_app_name>
+FUNC_KEY=$(az functionapp function keys list \
+  --name $FUNC_NAME \
+  --resource-group rg-edftest \
+  --function-name filter_sql_servers \
+  --query "default" -o tsv)
+
+curl -X POST "https://${FUNC_NAME}.azurewebsites.net/api/filter_sql_servers?code=${FUNC_KEY}"
+
+11. Test the output by looking for the Excel Spreadsheet in post-processing blob store set at postprocess_storage_name in terraform/terraform.tfvars. Download it, and open it with the password set in the Key Vault. Note that the password in password.txt will not work in lieu of a more secure option. 
+
+You shouldn't need additional privileges to access the Key Vault as it is already provisioned in the pre-requisite script. If you need to elevate your privileges to access Key Vault, run
+
+CURRENT_USER_OBJECT_ID=$(az ad signed-in-user show --query id -o tsv)
+SUBSCRIPTION_ID=<subscription_id>
+RG_NAME=<resource_group_name>
+KV_NAME=<keyvault_name>
+az role assignment create \
+  --assignee "$CURRENT_USER_OBJECT_ID" \
+  --role "Key Vault Secrets Officer" \
+  --scope "/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG_NAME}/providers/Microsoft.KeyVault/vaults/${KV_NAME}"

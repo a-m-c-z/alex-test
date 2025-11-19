@@ -176,7 +176,7 @@ echo -e "${GREEN}✔ Terraform backend ready${NC}"
 # 3. Service Principal Creation
 # ============================================================
 
-SP_NAME="sp-edf-github"
+SP_NAME="sp-edf-github-2"
 
 echo -e "\n${GREEN}=== Creating Service Principal: ${SP_NAME} ===${NC}"
 

@@ -1,0 +1,4 @@
+# Python dependencies for VM filtering script
+pandas
+openpyxl
+boto3

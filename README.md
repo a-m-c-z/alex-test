@@ -28,8 +28,8 @@ az login
 ### 3. Pre-requisite Infrastructure Setup
 Navigate to the project root directory and run the setup script and follow the prompts.
 ```bash
-chmod +x pre_requisite_setup.sh
-./pre_requisite_setup.sh
+chmod +x utilities/pre_requisite_setup.sh
+./utilities/pre_requisite_setup.sh
 ```
 
 **Note:** You must have full governance access in the target subscription.

@@ -1,0 +1,8 @@
+azure-functions
+azure-identity
+azure-storage-blob
+azure-keyvault-secrets
+cryptography<43.0.0
+pandas
+openpyxl
+msoffcrypto-tool

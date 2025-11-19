@@ -1,0 +1,10 @@
+pytest
+pytest-cov
+pytest-mock
+pytest-asyncio
+black
+flake8
+pylint
+mypy
+faker
+freezegun

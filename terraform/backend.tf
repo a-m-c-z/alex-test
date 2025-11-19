@@ -2,10 +2,10 @@
 terraform {
   required_version = ">= 1.5.0"
   backend "azurerm" {
-    resource_group_name  = "rg-alextf"
-    storage_account_name = "saalextf"
-    container_name       = "tfstate"
-    key                  = "edf-test.tfstate"
+    resource_group_name  = "REPLACE"
+    storage_account_name = "REPLACE"
+    container_name       = "REPLACE"
+    key                  = "REPLACE.tfstate"
   }
   required_providers {
     azurerm = {

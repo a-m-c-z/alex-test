@@ -1,6 +1,6 @@
 # Project Configuration
 project_name        = "alexfinal"
-resource_group_name = "rg-alexfinal"
+resource_group_name = "rg-alexfinal2"
 location            = "ukwest"
 
 # Storage Account Names (must be globally unique)
@@ -10,7 +10,7 @@ postprocess_storage_name = "saalexfinalpost"
 function_storage_name    = "saalexfinalfunc"
 
 # Key Vault Name (must be globally unique)
-keyvault_name = "kv-edf-test-101"
+keyvault_name = "kv-alexfinal2"
 
 # Function App Name (must be globally unique)
 function_app_name = "func-edftest"

@@ -65,6 +65,23 @@ echo -e "${BLUE}Current User Object ID: ${CURRENT_USER_OBJECT_ID}${NC}"
 echo -e "${BLUE}Subscription:           ${SUBSCRIPTION_ID}${NC}"
 echo -e "${BLUE}Tenant:                 ${TENANT_ID}${NC}"
 
+echo -e "${BLUE}Please provide a globally unique project name (alphanumeric only):${NC}"
+read -r PROJ_NAME
+
+# Validate project name
+if [[ ! "$PROJ_NAME" =~ ^[a-zA-Z0-9]+$ ]]; then
+    echo -e "${RED}Error: Project name must contain only alphanumeric characters (A–Z, 0–9).${NC}"
+    exit 1
+fi
+
+# Derived resource names
+RG_NAME="rg-${PROJ_NAME}"
+KV_NAME="kv-${PROJ_NAME}"
+
+echo -e "\n${GREEN}Using project name: ${PROJ_NAME}${NC}"
+echo -e "${GREEN}Resource Group: ${RG_NAME}${NC}"
+echo -e "${GREEN}Key Vault: ${KV_NAME}${NC}"
+
 # ============================================================
 # 1. Required Permissions Check + Self-Assignment
 # ============================================================
@@ -211,16 +228,14 @@ echo -e "${BLUE}Secret:   ${SP_SECRET}${NC}"
 
 echo -e "\n${GREEN}Assigning roles to Service Principal...${NC}"
 
-KV_NAME="kv-edf-test-101"
-
 echo -e "\n${GREEN}Assigning roles to Service Principal...${NC}"
 
 SP_ROLES=(
     "Contributor|/subscriptions/${SUBSCRIPTION_ID}"
     "User Access Administrator|/subscriptions/${SUBSCRIPTION_ID}"
-    "Storage Blob Data Contributor|/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/rg-infrastructure/providers/Microsoft.Storage/storageAccounts/${TF_STORAGE}"
+    "Storage Blob Data Contributor|/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${TF_RG}/providers/Microsoft.Storage/storageAccounts/${TF_STORAGE}"
     "Key Vault Secrets Officer|/subscriptions/${SUBSCRIPTION_ID}"
-    "Key Vault Administrator|/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/rg-edftest/providers/Microsoft.KeyVault/vaults/${KV_NAME}"
+    "Key Vault Administrator|/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG_NAME}/providers/Microsoft.KeyVault/vaults/${KV_NAME}"
 )
 
 for ENTRY in "${SP_ROLES[@]}"; do
@@ -361,6 +376,8 @@ EOF
 
 echo -e "\n=== Copy these lines to terraform/terraform.tfvars ===\n"
 cat <<EOF
+resource_group_name = "${RG_NAME}"
+...
 keyvault_name = "${KV_NAME}"
 ...
 user_jess_upn = "jess.admin@${DOMAIN}"

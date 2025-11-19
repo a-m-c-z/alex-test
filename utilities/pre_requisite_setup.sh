@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-#NOTE: AI used for slightly more complex Azure CLI queries, and output formatting. 
+# NOTE: AI used for slightly more complex Azure CLI queries, and output formatting. 
 # Also used for debugging Mac-specific issue.
 
 # ------------------------------------------------------------
@@ -211,93 +211,117 @@ echo -e "${GREEN}✔ Terraform backend ready${NC}"
 # 3. Service Principal Creation
 # ============================================================
 
-SP_NAME="sp-edf-github-2"
+echo -e "\n${GREEN}=== Service Principal Setup ===${NC}"
+echo -e "${BLUE}Do you need to create a new Service Principal for GitHub Actions? (yes/no):${NC}"
+read -r CREATE_SP
 
-echo -e "\n${GREEN}=== Creating Service Principal: ${SP_NAME} ===${NC}"
+CREATE_SP=$(echo "$CREATE_SP" | tr '[:upper:]' '[:lower:]')
 
-SP_APP_ID=$(az ad sp list --display-name "$SP_NAME" --query "[0].appId" -o tsv || true)
+if [[ "$CREATE_SP" == "yes" || "$CREATE_SP" == "y" ]]; then
+    echo -e "${BLUE}Please provide a name for the Service Principal:${NC}"
+    read -r SP_NAME
 
-if [ -z "$SP_APP_ID" ]; then
-    echo -e "${YELLOW}Creating SP: ${SP_NAME}${NC}"
+    if [ -z "$SP_NAME" ]; then
+        echo -e "${RED}Error: Service Principal name cannot be empty.${NC}"
+        exit 1
+    fi
 
-    SP_OUTPUT=$(az ad sp create-for-rbac \
-        --name "$SP_NAME" \
-        --role Contributor \
-        --scopes "/subscriptions/${SUBSCRIPTION_ID}" \
-        --query "{appId:appId,password:password,tenant:tenant}" -o json)
+    echo -e "\n${GREEN}Creating Service Principal: ${SP_NAME}${NC}"
 
-    SP_APP_ID=$(echo "$SP_OUTPUT" | jq -r .appId)
-    SP_SECRET=$(echo "$SP_OUTPUT" | jq -r .password)
+    SP_APP_ID=$(az ad sp list --display-name "$SP_NAME" --query "[0].appId" -o tsv || true)
+
+    if [ -z "$SP_APP_ID" ]; then
+        echo -e "${YELLOW}Creating SP: ${SP_NAME}${NC}"
+
+        SP_OUTPUT=$(az ad sp create-for-rbac \
+            --name "$SP_NAME" \
+            --role Contributor \
+            --scopes "/subscriptions/${SUBSCRIPTION_ID}" \
+            --query "{appId:appId,password:password,tenant:tenant}" -o json)
+
+        SP_APP_ID=$(echo "$SP_OUTPUT" | jq -r .appId)
+        SP_SECRET=$(echo "$SP_OUTPUT" | jq -r .password)
+    else
+        echo -e "${GREEN}SP already exists${NC}"
+        SP_SECRET="<NOT REGENERATED>"
+    fi
+
+    SP_OBJECT_ID=$(az ad sp show --id "$SP_APP_ID" --query "id" -o tsv)
+
+    echo -e "${BLUE}AppId:    ${SP_APP_ID}${NC}"
+    echo -e "${BLUE}ObjectId: ${SP_OBJECT_ID}${NC}"
+    echo -e "${BLUE}Secret:   ${SP_SECRET}${NC}"
+
+    # ============================================================
+    # 4. Assign Roles to SP
+    # ============================================================
+
+    echo -e "\n${GREEN}Assigning roles to Service Principal...${NC}"
+
+    SP_ROLES=(
+        "Contributor|/subscriptions/${SUBSCRIPTION_ID}"
+        "User Access Administrator|/subscriptions/${SUBSCRIPTION_ID}"
+        "Storage Blob Data Contributor|/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${TF_RG}/providers/Microsoft.Storage/storageAccounts/${TF_STORAGE}"
+        "Key Vault Administrator|/subscriptions/${SUBSCRIPTION_ID}"
+    )
+
+    for ENTRY in "${SP_ROLES[@]}"; do
+        ROLE="${ENTRY%%|*}"
+        SCOPE="${ENTRY##*|}"
+
+        echo -e "${BLUE}Assigning ${ROLE} → ${SCOPE}${NC}"
+
+        az role assignment create \
+            --assignee "$SP_OBJECT_ID" \
+            --role "$ROLE" \
+            --scope "$SCOPE" \
+            --only-show-errors >/dev/null 2>&1 || true
+    done
+
+    echo -e "${GREEN}✔ SP roles assigned${NC}"
+
+    echo -e "\n${GREEN}Assigning Microsoft Graph permissions to Service Principal...${NC}"
+
+    GRAPH_API_ID="00000003-0000-0000-c000-000000000000"
+    PERM_USER_READ_ALL="df021288-bdef-4463-88db-98f22de89214"
+    PERM_DIRECTORY_READ_ALL="7ab1d382-f21e-4acd-a863-ba3e13f7da61"
+
+    echo -e "${BLUE}Adding User.Read.All...${NC}"
+    az ad app permission add \
+      --id "$SP_APP_ID" \
+      --api $GRAPH_API_ID \
+      --api-permissions "${PERM_USER_READ_ALL}=Role" \
+      --only-show-errors >/dev/null 2>&1 || true
+
+    echo -e "${BLUE}Adding Directory.Read.All...${NC}"
+    az ad app permission add \
+      --id "$SP_APP_ID" \
+      --api $GRAPH_API_ID \
+      --api-permissions "${PERM_DIRECTORY_READ_ALL}=Role" \
+      --only-show-errors >/dev/null 2>&1 || true
+
+    echo -e "${GREEN}✔ Microsoft Graph permissions added${NC}"
+
+    echo -e "\n${GREEN}Granting admin consent for Microsoft Graph permissions...${NC}"
+
+    az ad app permission admin-consent \
+      --id "$SP_APP_ID" \
+      --only-show-errors >/dev/null 2>&1 || true
+
+    echo -e "${GREEN}✔ Admin consent granted (if permissions allowed)${NC}"
+
 else
-    echo -e "${GREEN}SP already exists${NC}"
-    SP_SECRET="<NOT REGENERATED>"
+    echo -e "${YELLOW}Skipping Service Principal creation.${NC}"
+    echo -e "${YELLOW}Note: Ensure your existing Service Principal has the required permissions:${NC}"
+    echo -e "${YELLOW}  - Contributor${NC}"
+    echo -e "${YELLOW}  - User Access Administrator${NC}"
+    echo -e "${YELLOW}  - Storage Blob Data Contributor (on Terraform storage account)${NC}"
+    echo -e "${YELLOW}  - Key Vault Administrator${NC}"
+    echo -e "${YELLOW}  - Microsoft Graph: User.Read.All and Directory.Read.All${NC}"
+    
+    SP_APP_ID="<YOUR_EXISTING_SP_APP_ID>"
+    SP_SECRET="<YOUR_EXISTING_SP_SECRET>"
 fi
-
-SP_OBJECT_ID=$(az ad sp show --id "$SP_APP_ID" --query "id" -o tsv)
-
-echo -e "${BLUE}AppId:    ${SP_APP_ID}${NC}"
-echo -e "${BLUE}ObjectId: ${SP_OBJECT_ID}${NC}"
-echo -e "${BLUE}Secret:   ${SP_SECRET}${NC}"
-
-
-# ============================================================
-# 4. Assign Roles to SP (idempotent)
-# ============================================================
-
-echo -e "\n${GREEN}Assigning roles to Service Principal...${NC}"
-
-SP_ROLES=(
-    "Contributor|/subscriptions/${SUBSCRIPTION_ID}"
-    "User Access Administrator|/subscriptions/${SUBSCRIPTION_ID}"
-    "Storage Blob Data Contributor|/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${TF_RG}/providers/Microsoft.Storage/storageAccounts/${TF_STORAGE}"
-    "Key Vault Administrator|/subscriptions/${SUBSCRIPTION_ID}"
-)
-
-for ENTRY in "${SP_ROLES[@]}"; do
-    ROLE="${ENTRY%%|*}"
-    SCOPE="${ENTRY##*|}"
-
-    echo -e "${BLUE}Assigning ${ROLE} → ${SCOPE}${NC}"
-
-    az role assignment create \
-        --assignee "$SP_OBJECT_ID" \
-        --role "$ROLE" \
-        --scope "$SCOPE" \
-        --only-show-errors >/dev/null 2>&1 || true
-done
-
-echo -e "${GREEN}✔ SP roles assigned${NC}"
-
-echo -e "\n${GREEN}Assigning Microsoft Graph permissions to Service Principal...${NC}"
-
-GRAPH_API_ID="00000003-0000-0000-c000-000000000000"
-PERM_USER_READ_ALL="df021288-bdef-4463-88db-98f22de89214"
-PERM_DIRECTORY_READ_ALL="7ab1d382-f21e-4acd-a863-ba3e13f7da61"
-
-echo -e "${BLUE}Adding User.Read.All...${NC}"
-az ad app permission add \
-  --id "$SP_APP_ID" \
-  --api $GRAPH_API_ID \
-  --api-permissions "${PERM_USER_READ_ALL}=Role" \
-  --only-show-errors >/dev/null 2>&1 || true
-
-echo -e "${BLUE}Adding Directory.Read.All...${NC}"
-az ad app permission add \
-  --id "$SP_APP_ID" \
-  --api $GRAPH_API_ID \
-  --api-permissions "${PERM_DIRECTORY_READ_ALL}=Role" \
-  --only-show-errors >/dev/null 2>&1 || true
-
-echo -e "${GREEN}✔ Microsoft Graph permissions added${NC}"
-
-echo -e "\n${GREEN}Granting admin consent for Microsoft Graph permissions...${NC}"
-
-az ad app permission admin-consent \
-  --id "$SP_APP_ID" \
-  --only-show-errors >/dev/null 2>&1 || true
-
-echo -e "${GREEN}✔ Admin consent granted (if permissions allowed)${NC}"
-
 
 # ============================================================
 # 5. Create EXACT USERS (from your snippet)
@@ -404,7 +428,8 @@ echo -e "\n=== User Provisioning Complete ===\n"
 # 7. GitHub Actions secret output summary
 # ============================================================
 
-cat <<EOF
+if [[ "$CREATE_SP" == "yes" || "$CREATE_SP" == "y" ]]; then
+    cat <<EOF
 
 ===========================================================
 EDF Environment Setup Complete
@@ -423,3 +448,24 @@ Add them in your GitHub repo:
 ===========================================================
 
 EOF
+else
+    cat <<EOF
+
+===========================================================
+EDF Environment Setup Complete
+===========================================================
+
+=== GitHub Actions Secrets (using existing Service Principal) ===
+
+Ensure these secrets are configured in your GitHub repo:
+  Settings → Environments → <name your env> → Add Environment Secret
+
+AZURE_CLIENT_ID=<your_existing_sp_app_id>
+AZURE_TENANT_ID=${TENANT_ID}
+AZURE_SUBSCRIPTION_ID=${SUBSCRIPTION_ID}
+AZURE_CLIENT_SECRET=<your_existing_sp_secret>
+
+===========================================================
+
+EOF
+fi

@@ -2,8 +2,8 @@
 terraform {
   required_version = ">= 1.5.0"
   backend "azurerm" {
-    resource_group_name  = "rg-infrastructure"
-    storage_account_name = "satfedftest"
+    resource_group_name  = "rg-edf-temp"
+    storage_account_name = "satfedftemp"
     container_name       = "tfstate"
     key                  = "edf-test.tfstate"
   }
